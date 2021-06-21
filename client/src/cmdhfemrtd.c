@@ -698,18 +698,18 @@ static bool emrtd_lds_get_data_by_tag(uint8_t *datain, size_t datainlen, uint8_t
 static bool emrtd_select_and_read(uint8_t *dataout, size_t *dataoutlen, uint16_t file, uint8_t *ks_enc, uint8_t *ks_mac, uint8_t *ssc, bool use_secure) {
     if (use_secure) {
         if (emrtd_secure_select_file_by_ef(ks_enc, ks_mac, ssc, file) == false) {
-            PrintAndLogEx(ERR, "Failed to secure select %s.", file);
+            PrintAndLogEx(ERR, "Failed to secure select %04X", file);
             return false;
         }
     } else {
         if (emrtd_select_file_by_ef(file) == false) {
-            PrintAndLogEx(ERR, "Failed to select %04X.", file);
+            PrintAndLogEx(ERR, "Failed to select %04X", file);
             return false;
         }
     }
 
     if (emrtd_read_file(dataout, dataoutlen, ks_enc, ks_mac, ssc, use_secure) == false) {
-        PrintAndLogEx(ERR, "Failed to read %04X.", file);
+        PrintAndLogEx(ERR, "Failed to read %04X", file);
         return false;
     }
     return true;
@@ -843,9 +843,13 @@ static bool emrtd_dump_file(uint8_t *ks_enc, uint8_t *ks_mac, uint8_t *ssc, uint
     strncat(filepath, PATHSEP, 2);
     strcat(filepath, name);
 
-    PrintAndLogEx(INFO, "Read %s, len: %i.", name, resplen);
-    PrintAndLogEx(DEBUG, "Contents (may be incomplete over 2k chars): %s", sprint_hex_inrow(response, resplen));
+    PrintAndLogEx(INFO, "Read " _YELLOW_("%s") " , len %zu", name, resplen);
+    PrintAndLogEx(DEBUG, "Contents (may be incomplete over 2k chars)");
+    PrintAndLogEx(DEBUG, "------------------------------------------");
+    PrintAndLogEx(DEBUG, "%s", sprint_hex_inrow(response, resplen));
+    PrintAndLogEx(DEBUG, "------------------------------------------");
     saveFile(filepath, ".BIN", response, resplen);
+
     emrtd_dg_t *dg = emrtd_fileid_to_dg(file);
     if ((dg != NULL) && (dg->dumper != NULL)) {
         dg->dumper(response, resplen, path);
@@ -1030,8 +1034,8 @@ int dumpHF_EMRTD(char *documentnumber, char *dob, char *expiry, bool BAC_availab
 
     // Dump EF_CardAccess (if available)
     if (!emrtd_dump_file(ks_enc, ks_mac, ssc, dg_table[EF_CardAccess].fileid, dg_table[EF_CardAccess].filename, BAC, path)) {
-        PrintAndLogEx(INFO, "Couldn't dump EF_CardAccess, card does not support PACE.");
-        PrintAndLogEx(HINT, "This is expected behavior for cards without PACE, and isn't something to be worried about.");
+        PrintAndLogEx(INFO, "Couldn't dump EF_CardAccess, card does not support PACE");
+        PrintAndLogEx(HINT, "This is expected behavior for cards without PACE, and isn't something to be worried about");
     }
 
     // Authenticate with the eMRTD
@@ -1042,7 +1046,7 @@ int dumpHF_EMRTD(char *documentnumber, char *dob, char *expiry, bool BAC_availab
 
     // Select EF_COM
     if (!emrtd_select_and_read(response, &resplen, dg_table[EF_COM].fileid, ks_enc, ks_mac, ssc, BAC)) {
-        PrintAndLogEx(ERR, "Failed to read EF_COM.");
+        PrintAndLogEx(ERR, "Failed to read EF_COM");
         DropField();
         return PM3_ESOFT;
     }
@@ -1051,11 +1055,12 @@ int dumpHF_EMRTD(char *documentnumber, char *dob, char *expiry, bool BAC_availab
     char *filepath = calloc(strlen(path) + 100, sizeof(char));
     if (filepath == NULL)
         return PM3_EMALLOC;
+
     strcpy(filepath, path);
     strncat(filepath, PATHSEP, 2);
     strcat(filepath, dg_table[EF_COM].filename);
 
-    PrintAndLogEx(INFO, "Read EF_COM, len: %i.", resplen);
+    PrintAndLogEx(INFO, "Read EF_COM, len: %zu", resplen);
     PrintAndLogEx(DEBUG, "Contents (may be incomplete over 2k chars): %s", sprint_hex_inrow(response, resplen));
     saveFile(filepath, ".BIN", response, resplen);
 
@@ -1065,7 +1070,7 @@ int dumpHF_EMRTD(char *documentnumber, char *dob, char *expiry, bool BAC_availab
     size_t filelistlen = 0;
 
     if (emrtd_lds_get_data_by_tag(response, resplen, filelist, &filelistlen, 0x5c, 0x00, false, true, 0) == false) {
-        PrintAndLogEx(ERR, "Failed to read file list from EF_COM.");
+        PrintAndLogEx(ERR, "Failed to read file list from EF_COM");
         DropField();
         return PM3_ESOFT;
     }

@@ -2033,18 +2033,24 @@ static int handler_desfire_writedata(mfdes_data_t *data, MFDES_FILE_TYPE_T type,
     if (data->fileno > 0x1F) {
         return PM3_EINVARG;
     }
+
     uint32_t datatowrite = le24toh(data->length);
     uint32_t offset = le24toh(data->offset);
     uint32_t datasize, recvlen = 0;
     int res = PM3_SUCCESS;
     uint16_t sw = 0;
-    uint8_t tmp[60] = {0};
+
     mfdes_data_t sdata;
     sAPDU apdu = {0x90, MFDES_WRITE_DATA, 0x00, 0x00, 0, (uint8_t *) &sdata}; // 0x3D
+
+    uint8_t tmp[61] = {0};
     tmp[0] = MFDES_WRITE_DATA;
     tmp[1] = data->fileno;
     apdu.data = &tmp[1]; // tmp[0] is holding the OPCODE for macd calc, so we dont want it in the apdu
-    if (type == MFDES_RECORD_FILE) apdu.INS = MFDES_WRITE_RECORD;
+
+    if (type == MFDES_RECORD_FILE) {
+        apdu.INS = MFDES_WRITE_RECORD;
+    }
 
     while (datatowrite) {
 
@@ -2445,7 +2451,7 @@ static int CmdHF14ADesGetUID(const char *Cmd) {
     uint8_t uidlen = 16;
 
     // Get datalen <uid len> + <crclen> by removing padding.
-    while ((uidlen > 0) && (uid[uidlen] == 0x00))
+    while ((uidlen > 0) && (uid[uidlen - 1] == 0x00))
         uidlen--;
 
     if (tag->authentication_scheme == AS_LEGACY)
@@ -2455,10 +2461,9 @@ static int CmdHF14ADesGetUID(const char *Cmd) {
 
     if (uidlen <= 4) // < incase we trimmed a CRC 00 or more
         uidlen = 4;
-    else    
+    else
         uidlen = 7;
 
-//    PrintAndLogEx(SUCCESS, "    UID: " _GREEN_("%s"), sprint_hex(uid, sizeof(uid)));
     PrintAndLogEx(SUCCESS, "    UID: " _GREEN_("%s"), sprint_hex(uid, uidlen));
     return res;
 }
@@ -3000,11 +3005,11 @@ static int CmdHF14ADesGetValueData(const char *Cmd) {
 
 static int CmdHF14ADesReadData(const char *Cmd) {
     CLIParserContext *ctx;
-    CLIParserInit(&ctx, "hf mfdes readdata",
+    CLIParserInit(&ctx, "hf mfdes read",
                   "Read data from File\n"
                   "Make sure to select aid or authenticate aid before running this command.",
-                  "hf mfdes readdata -n 01 -t 0 -o 000000 -l 000000 -a 123456\n"
-                  "hf mfdes readdata -n 01 -t 0                 --> Read all data from standard file, fileno 01"
+                  "hf mfdes read -n 1 -t 0 -o 000000 -l 000000 -a 123456\n"
+                  "hf mfdes read -n 1 -t 0                       --> Read all data from standard file, fileno 1"
                  );
 
     void *argtable[] = {
@@ -3094,13 +3099,13 @@ static int CmdHF14ADesReadData(const char *Cmd) {
         if (res == PM3_SUCCESS) {
             uint32_t len = le24toh(ft.length);
 
-            PrintAndLogEx(SUCCESS, "Read %u bytes from file %d:", ft.fileno, len);
+            PrintAndLogEx(SUCCESS, "Read %u bytes from file %d", ft.fileno, len);
             PrintAndLogEx(INFO, "Offset  | Data                                            | Ascii");
             PrintAndLogEx(INFO, "----------------------------------------------------------------------------");
 
             for (uint32_t i = 0; i < len; i += 16) {
                 uint32_t l = len - i;
-                PrintAndLogEx(INFO, "%02d/0x%02X | %s| %s", i, i, sprint_hex(&ft.data[i], l > 16 ? 16 : l), sprint_ascii(&ft.data[i], l > 16 ? 16 : l));
+                PrintAndLogEx(INFO, "%3d/0x%02X | %s| %s", i, i, sprint_hex(&ft.data[i], l > 16 ? 16 : l), sprint_ascii(&ft.data[i], l > 16 ? 16 : l));
             }
         } else {
             PrintAndLogEx(ERR, "Couldn't read data. Error %d", res);
@@ -3204,10 +3209,10 @@ static int CmdHF14ADesChangeValue(const char *Cmd) {
 static int CmdHF14ADesWriteData(const char *Cmd) {
 
     CLIParserContext *ctx;
-    CLIParserInit(&ctx, "hf mfdes writedata",
-                  "Write data to File\n"
+    CLIParserInit(&ctx, "hf mfdes write",
+                  "Write data to file\n"
                   "Make sure to select aid or authenticate aid before running this command.",
-                  "hf mfdes writedata -n 01 -t 0 -o 000000 -d 3132333435363738"
+                  "hf mfdes write -n 01 -t 0 -o 000000 -d 3132333435363738"
                  );
 
     void *argtable[] = {
@@ -3686,7 +3691,7 @@ static int CmdHF14ADesInfo(const char *Cmd) {
 
 
     iso14a_card_select_t card;
-    res = SelectCard14443A_4(true, &card);
+    res = SelectCard14443A_4(true, false, &card);
     if (res == PM3_SUCCESS) {
         static const char STANDALONE_DESFIRE[] = { 0x75, 0x77, 0x81, 0x02};
         static const char JCOP_DESFIRE[] = { 0x75, 0xf7, 0xb1, 0x02 };
@@ -5138,8 +5143,8 @@ static command_t CommandTable[] = {
     {"deletefile",       CmdHF14ADesDeleteFile,       IfPm3Iso14443a,  "Create Delete File"},
     {"dump",             CmdHF14ADesDump,             IfPm3Iso14443a,  "Dump all files"},
     {"getvalue",         CmdHF14ADesGetValueData,     IfPm3Iso14443a,  "Get value of file"},
-    {"readdata",         CmdHF14ADesReadData,         IfPm3Iso14443a,  "Read data from standard/backup/record file"},
-    {"writedata",        CmdHF14ADesWriteData,        IfPm3Iso14443a,  "Write data to standard/backup/record file"},
+    {"read",             CmdHF14ADesReadData,         IfPm3Iso14443a,  "Read data from standard/backup/record file"},
+    {"write",            CmdHF14ADesWriteData,        IfPm3Iso14443a,  "Write data to standard/backup/record file"},
     {NULL, NULL, NULL, NULL}
 };
 
